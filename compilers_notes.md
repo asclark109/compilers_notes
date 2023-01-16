@@ -390,7 +390,7 @@ The algorithm halts when:
 Extended example: NFA -> DFA for `a(b|c)*`
 ![alt text](pics/p37.JPG "Title")
 
-1. `Σ={a,b,c}`. `S = {}`. `S = {}`. start with `{q0}` from the NFA. produce the `ε-closure()` on `{q0}`. Can't reach anything with ε edges, so `{q0}` is returned (a set of states), which forms a DFA, which we label `s0`. add `s0` to `S` and `W`. Now, `S == W == {{q0}}`.
+1. `Σ={a,b,c}`. `S = {}`. `W = {}`. start with the state that is the starting state of the NFA, `{q0}`. produce the `ε-closure()` on `{q0}`. Can't reach anything with ε edges, so `{q0}` is returned (a set of states), which forms a DFA, which we label `s0`. add `s0` to `S` and `W`. Now, `S == W == {{q0}}`.
 2. remove a set `s` from `W`: `{q0}`
 3. Now, from the set `s`, for each element in that set, we are going to produce new sets by transitioning from all letters in the alphabet. (for each letter in alphabet) starting with a: from `q0` can we reach others states traversing a edges. Yes: `q1`. so `{q1}` returned by `Move(s,a)`. Now, produce the `ε-closure()` on that set of states: from `{q1}` what states can we reach traversing ε edges: `{q1,q2,q3,q4,q6,q9}`. Now, `t == {q1,q2,q3,q4,q6,q9}`, and we record that in `T[s,a]` (for the set `s`, for the letter `a`).
 4. Now:
