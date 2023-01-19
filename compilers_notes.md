@@ -520,3 +520,198 @@ All this technology allows us to automate scanner construction
 For most modern language features, this works:
 * you should think twice before introducing a feature that defeats a DFA-based scanner (should always try creating the DFA and then coding the DFA...if you don't define your tokens using a DFA approach, you may get into situations where you won't pick up reserved words...won't be as robust, and as the language adds features it will be hard to ensure the scanner will implement it correctly)
 * the ones we've seen (e.g. insignificant blanks, non-reserved keywords) have not proven particularly useful or long lasting
+
+# Module 3
+
+once we have defined tokens (i.e. words) in the code, we need to determine if the structure of the program is correct
+* __Parsing__: the phase that determines wheter a program is grammatically (i.e., structurally) well-formed and identifies the function for each component
+
+  * e.g.: english is composed of rules that specify the correct structure for its sentences. The most basic english sentence must be comprised of a _subject_, _verb_, _punctuation mark_: `lamont teaches.`
+  * there are also many different rules (i.e. ways) to structure a sentence: _subject_, _verb_, _punctuation mark_ OR _subject_, _verb_, _object_, _punctuation mark_'
+  * in general, the english language has a grammar that defines many rules that describe the correct structure for a sentences (and even sometimes with ambiguity). However, these rules allow us to verify the structure is correct
+
+### Motivation for Syntactical Analysis (Parsing)
+
+* at the end of parsing, we will generate a tree structure that will help us in later phases analyze the meaning of the program:
+![alt text](pics/p50.JPG "Title")
+
+* input source code: `if (x==y) x=45`
+* (scanner/"lexer" produces) character stream:  `i, f,  , (, x, =, =, y, ),  , x, =, 45, ;`
+* (scanner/"lexer" produces) token stream:      `IF, LPAREN, ID(x), EQ, ID(y), RPAREN, ID(x), ASSIGN, INT(45), SCOLON`
+* (parser produces) abstract syntax tree (AST): 
+![alt text](pics/p10.JPG "Title")
+
+### What does Syntactical Analysis not do?
+
+* type checking
+* variable declarations and initializations
+* function declarations
+
+example
+```golang
+var a int 
+var b int
+b = false // cannot assign b to a value of a different type (b is type int)
+c = a + b // cannot use variables that are not declared (c)
+```
+
+These are deferred until _semantic analysis_
+
+### Specification of Language Syntax
+
+goal: how can we specify the language syntax precisely and conveniently to make it easy to parse source code?
+
+* _lexical analysis_: used __regular expressions__ to describe tokens. This made it easy to convert them to DFAs and simulated the DFAs to produce the tokens
+  * can we use _regular expressions_ alone to specify programming language syntax?
+    * __NO__: regular expressions cannot handle _recursion_. _Regular Expressions must be finite and have no recursive structure._
+
+![alt text](pics/p51.JPG "Title")
+
+* Languages are not regular and cannot be described by regular expressions
+  * DFA has only a finite number of states so adding paranthesis would require some form of counting which is not doable with regular expressions
+
+We need a way to specify nesting or specifying a recursive structure for various proramming language constructs
+
+### Grammars
+
+__Grammar__: a precise, declarative specification of syntactic structure of a language
+* the format (notation) of a grammar is usually specified in __Extended Backus-Naur Form (EBNF)__
+  * has a set of __rewriting rules__ (also called __productions__)
+  * has a set of __non-terminals__ (appear on the LHS of a production)
+  * has a set of __terminals__ (token from the alphabet)
+
+example rewriting rules (productions):
+* `Stmt` -> __`if`__ `Expr` __`then`__ `Stmt` __`else`__ `Stmt`
+* `Expr` -> `Expr` __`+`__ `Expr` | `Expr` __`*`__ `Expr` | __`(`__`Expr`__`)`__ | __`id`__
+> vertical bar is shortand for multiple productions
+* _non-terminals_ = `Stmt`, `Expr`
+* _terminals_ = __`if`__, __`then`__, __`else`__, __`+`__, __`*`__, __`(`__, __`)`__, __`id`__
+
+### Formal Context-Free Grammar
+
+__Formal Context-Free Grammar__: regular expressions with recursion (more expressive than regular expressions)
+* defined by __T,N,P,S__:
+  * __T__: set of terminals
+  * __N__: set of non-terminals
+  * __P__: set of productions (rewriting rules)
+  * __S__: start symbol (belongs to N)
+
+example `G=(T,N,P,S)`
+```
+T = {+,*,(,),id}
+N = {E}
+P = {
+  E -> E + E,
+  E -> E * E,
+  E -> (E),
+  E -> id
+}
+S = E
+```
+
+re-writing the productions in `EBNF` form would yield:
+```
+E -> E + E | E * E | (E) | id
+```
+
+example of context-free grammar (CFG): sum grammar on integers
+1. context-free grammar
+```
+S -> E + S | E
+E -> INT | (S)
+```
+2. expanded definition of grammar:
+```
+S -> E + S
+S -> E
+E -> INT
+E -> (S)
+
+4 productions
+2 non-terminals: S, E
+4 terminals: ( ) + INT
+Start symbol: S
+```
+
+Each context-free grammar defines a __context-free language (L)__, which contains all sentences of terminal symbols derived from repeated application of productions from the starting symbol. 
+* e.g. example language sentences from the Sun grammar: `(1 + 2), 2, 4 + 21, ((3+3)+5)`
+
+### Derivations
+
+can see if a sentence is part of a language by performing a __derivation__
+* example: `3+(17)`
+1. starting with the start symbol, repeatedly replace a non-terminal using a production rule:
+```
+// CFG //
+1. E -> E + E
+2. E -> (E)
+3. E -> INT
+
+sentence: 3 + (17)
+(apply 1.) => E + E
+(apply 3.) => INT(3) + E
+(apply 2.) => INT(3) + (E)
+(apply 3.) => INT(3) + (INT(17))
+```
+* intermediate forms (`(INT(3) + E)`, `INT(3) + (E)`, etc) always contain non-terminals
+
+### Derivation Order
+
+Can choose to apply productions in any order
+* for some arbitrary strings `α` and `γ` and a production `A -> β`, a single step of a derivation is
+  * `αAγ => αβγ` (substitute `β` for an occurence of `A`)
+
+Two standard orders: _leftmost_ derivation and _rightmost_ derivation
+* __Leftmost derivation__: at each step, the leftmost non-terminal is replaced
+```
+E => E + E
+  => INT + E
+  => INT + INT
+```
+* __Rightmost derivation__: at each step, the rightmost non-terminal is replaced
+```
+E => E + E
+  => E + INT
+  => INT + INT
+```
+
+### Derivation Example
+
+* Derive ((34+3)+4)+9
+```
+// CFG //
+S => E + S | E
+E => INT | (S)
+```
+
+derivation:
+```
+Left-most derivation
+S => E + S
+  => (S) + S
+  => (E + S) + S
+  => ((S) + S) + S
+  =>((E+S) + S) + S
+  =>((34+S) + S) + S
+  =>((34+E) + S) + S
+  => ((34+3) + S) + S
+  => ((34+3) + E) + S
+  => ((34+3) + 4) + S
+  => ((34+3) + 4) + E
+  => ((34+3) + 4) + 9
+
+Right-most derivation
+S => E + S
+ => E + E
+ => E + 9
+ => (S) + 9
+ => (E + S) + 9
+ => (E + E) + 9
+ => (E + 4) + 9
+ => ((S) + 4) + 9
+ => ((E + S) + 4) + 9
+ => ((E + E) + 4 ) + 9
+ => ((E + 3) + 4 ) + 9
+ => ((34 + 3) + 4) + 9
+```
+
