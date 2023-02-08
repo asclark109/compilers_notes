@@ -640,10 +640,19 @@ Each context-free grammar defines a __context-free language (L)__, which contain
 
 can see if a sentence is part of a language by performing a __derivation__
 * example: `3+(17)`
+* __sentence__: sequence of non-terminal values
+* __derivation__: a test to see if a sentence is a legal sentence for a language (it is legal if it can be derived from the language)
+* intermediate forms (`(INT(3) + E)`, `INT(3) + (E)`, etc) always contain non-terminals
+
+__performing a derivation__
 1. starting with the start symbol, repeatedly replace a non-terminal using a production rule:
 ```
 // CFG //
+non-terminals: S, E
+terminals: ( ) INT + *
+production rules (4):
 1. E -> E + E
+1. E -> E * E
 2. E -> (E)
 3. E -> INT
 
@@ -653,7 +662,6 @@ sentence: 3 + (17)
 (apply 2.) => INT(3) + (E)
 (apply 3.) => INT(3) + (INT(17))
 ```
-* intermediate forms (`(INT(3) + E)`, `INT(3) + (E)`, etc) always contain non-terminals
 
 ### Derivation Order
 
@@ -682,6 +690,10 @@ E => E + E
 // CFG //
 S => E + S | E
 E => INT | (S)
+
+productions: 2
+non-terminals: S, E
+terminals: + ( ) INT 
 ```
 
 derivation:
@@ -715,3 +727,613 @@ S => E + S
  => ((34 + 3) + 4) + 9
 ```
 
+### Derivation to Parse Tree
+
+__Parse Tree__: graphical tree representation of a derviation
+* _internal nodes_ are represented with non-terminals
+* _leaf nodes_ are represented with terminals
+* building a parse tree from a derivation makes the next step of compilation easier
+  * performing an in-order traversal yields a sentence from the language
+  * non information about order of derivation steps (although we used left-most in the above example)
+  * doing a left-most or right-most derivation is not important; they should yield the same parse tree. if they do not yield the same parse tree, the grammar is ambiguous.
+
+example:
+```
+(34+5)+9 derivation
+S => E + S
+ => (S) + S
+ => (E + S) + S
+ => (34 + S) + S
+ => (34 + E) + S
+ => (34 + 5) + S
+ => (34 + 5) + E
+ => (34 + 5) + 9
+```
+![alt text](pics/p53.JPG "Title")
+
+### Parse Tree vs Abstract Syntax Tree
+
+* parse tree is also known as "__concrete syntax__"
+* an AST is similar to a parse tree but _discards / abstracts out unnecessary information_ (i.e. removes the non-terminals)
+![alt text](pics/p54.JPG "Title")
+
+### Ambiguous Grammars
+
+__ambiguous grammar__: grammar where we can derive a sentence with more than one leftmost derivation, which produces different parse trees.
+```
+e.g.
+E -> E + E
+E -> E * E
+E -> INT
+
+consider 1 + 2 * 3
+
+E => E + E
+  => 1 + E
+  => 1 + E * E
+  => 1 + 2 * E
+  => 1 + 2 * 3
+
+E => E * E
+  => E + E * E
+  => 1 + E * E
+  => 1 + 2 * E
+  => 1 + 2 * 3
+```
+
+![alt text](pics/p55.JPG "Title")
+![alt text](pics/p56.JPG "Title")
+
+### Ambiguous Grammars (if-then-else)
+
+![alt text](pics/p57.JPG "Title")
+
+### How to Fix an Ambiguous Grammar
+
+Usually can eliminate ambiguity by rewriting grammar to include additional rules and allowing recursion only on the right or left
+```
+E -> E + T
+E -> T
+T -> T * F
+T -> F
+F -> INT
+
+E = Expression
+T = Term
+F = Factor
+```
+* Make `*` bind higher than `+` (i.e. `*` has higher precedence than `+`)
+* `1 + 2 * 3` means `1 + (2 * 3)` instead of `(1 + 2) * 3`
+* build grammar from highest to lowest precedence
+* make grammar use (right or left) recursion. In this case we use left-recursion -> left-associativity
+
+example: write out the derivation steps for leftmost and rightmost to see how this tree was produced
+```
+1 + 2 * 3
+
+leftmost derivation
+E -> E + T
+  -> T + T
+  -> F + T
+  -> 1 + T
+  -> 1 + T * F
+  -> 1 + F * F
+  -> 1 + 2 * F
+  -> 1 + 2 * 3
+
+rightmost derivation
+E -> E + T
+  -> E + T * F
+  -> E + T * 3
+  -> E + F * 3
+  -> E + 2 * 3
+  -> T + 2 * 3
+  -> F + 2 * 3
+  -> 1 + 2 * 3
+```
+
+### Parsing
+
+> to do parsing, we need the context-free grammar of the lanauge. If we can construct the derivation for the sentence, then the parser can accept that program as being a valid program within the language. Otherwise, it returns an error. A parser is trying to find a derviation for that program.
+
+__Parser__: program that given a sentence constructs a derivation for that sentence
+* if it can construct a derivation then it will accept the sentence as part of the language; otherwise, error
+
+* Parsers read their input from left-to-right but may construct the parse tree differently
+* __top-down parser__: constructs the tree from root to leaves (algorithms: _recursive descent_, _predictive parsing_, _LL(1)_)
+  * grammars have to be formatted in a certain way in order for a top-down parser to work correctly
+* __bottom-down parser__: constructs the tree from leaves to root (algorithms: _shift-reduce_, _LR_, _SLR_, _LALR_)
+  * LR algorithms are the most commonly used parsing algorithms in modern compilers
+
+### Top-Down Parsing
+
+construct parse tree by starting at the start symbol and "guess" at the derivation step
+* can use the next input token to guide in guessing
+
+__recursive descent with backtracking__ is the easiest algorithm to implement. Though, it is probably the least efficient in space-time complexity. predictive-based parsing does a bit more optimally than randomly guessing the next production step.
+* can implement top-down parsing using __recursive descent with backtracking__; however, before we do this we must modify the grammar to be __right recursive__
+* most top-down parsing algorithms don't handle left recursion very well
+
+![alt text](pics/p58.JPG "Title")
+* the two grammars above are equivalent. The LHS is written as a left-recursive grammar; the RHS is written as a right-recursive grammar.
+* `ε` is the empty string
+
+e.g.
+```
+using left-recursive grammar
+E is the start symbol
+E -> E + T
+  -> T + T
+  -> F + T
+  -> 3 + T
+  -> 3 + T * F
+  -> 3 + F * F
+  -> 3 + 4 * F
+  -> 3 + 4 * 5
+
+using right-recursive grammar
+E is the start symbol
+E -> T E'
+  -> F T' E'
+  -> 3 T' E'
+  -> 3 E'    // substitute in epsilon which is "", basically deletion
+  -> 3 + T E'
+  -> 3 + F T' E'
+  -> 3 + 4 T' E'
+  -> 3 + 4 * F T' E' 
+  -> 3 + 4 * 5 T' E' 
+  -> 3 + 4 * 5 E'  // T' => epsilon
+  -> 3 + 4 * 5     // E' => epsilon
+```
+
+### Recursive Descent algorithm
+
+Lets examine a grammar
+```
+E  -> T E'
+E' -> + T E'
+E' -> ε
+T  -> F T'
+T' -> * F T'
+T' -> ε
+F  -> INT
+```
+
+* for every unique symbol on the RHS of a production, we will have its own single function
+  * `E`, `E'`, `T`, `T'`, `F`
+* within that function we will decide which production rule to take
+  * `E` has one rule. Will apply `T E'`.
+  * `E'` has two production rules so we have to choose.
+* start with the start symbol and call that token's function
+
+```golang
+
+// E  -> T E'
+// E' -> + T E'
+// E' -> ε
+// T  -> F T'
+// T' -> * F T'
+// T' -> ε
+// F  -> INT
+
+func (p *Parser) nextToken() ct.Token {
+
+	var token ct.Token
+	if p.currIdx == len(p.tokens) { // reached EOF. the last token
+		token = p.tokens[p.currIdx-1] // keeps returning the last token.
+	} else {
+		p.currIdx += 1
+		token = p.tokens[p.currIdx]
+	}
+	return token
+}
+
+// Parse() returns true if the tokens in the sentence is a valid sentence in the language.
+func (p *Parser) Parse() bool {
+	p.nextToken() 
+	return E(p) // start with the start symbol and call that token's function
+}
+
+func E(p *Parser) bool {
+	return T(p) && EPrime(p)
+}
+func EPrime(p *Parser) bool {
+
+	if p.match(ct.PLUS) {
+		return T(p) && EPrime(p)
+	}
+	return true
+}
+func T(p *Parser) bool {
+	return F(p) && TPrime(p)
+}
+func TPrime(p *Parser) bool {
+
+	if p.match(ct.ASTERISK) {
+		return F(p) && TPrime(p)
+	}
+	return true // this handles T' -> ε
+}
+func F(p *Parser) bool {
+
+	if p.match(ct.INT) { // does the current token I'm at match an integer?
+		return true
+	} // may have other else-if statements here (for e.g. E -> INT | ID | ...)
+	parseError("expected integer")
+	return false
+}
+
+func (p *Parser) match(token ct.TokenType) bool {
+
+	if token == p.currToken().Type {
+		p.nextToken()
+		return true
+	}
+	return false
+}
+```
+
+### Example: Cal Language Grammar
+
+EBNF form grammar for simple language: `Cal Language`
+* `{ ... }` means zero or more
+```
+Program = Block 'eof'                       
+Block = {Statement}                         
+Statement = Let | Assignment | Print        
+Let = 'let' 'id' '=' Expression ';'         
+Assignment = 'id' '=' Expression ';'        
+Print = 'print' Expression ';'              
+Expression = Term ExpressionPrime           
+ExpressionPrime = '+' Term ExpressionPrime  
+ExpressionPrime = '-' Term ExpressionPrime  
+ExpressionPrime = 'ε'                       
+Term = Factor TermPrime                     
+TermPrime = '*' Factor TermPrime            
+TermPrime = '/' Factor TermPrime            
+TermPrime = 'ε'                             
+Factor = 'INT' | 'id'                       
+```
+
+# Module 4/5
+
+## Semantic Analysis Overview
+
+__Goal__: determine any remaining issues that would result in an invalid program
+* determine if variables are undefined
+* statically type checking to ensure types are consistent based on use
+* determine uninitialized variables (if required) and unreachable code
+  * (unreachable code) e.g. an if-else that has a return statement in both the if and else clause will cause all code after the if-else to be unreachable
+* determine useful information for later compiler phases
+  * type check expressions
+  * memory layout sizes for each variable
+
+| Semantic Information | Produced By | Required By |
+|---|---|---|
+| constant/variable information | declarations, expressions | expressions, statements |
+| type intformation | declarations, expressions | operations |
+| register & memory locations | compiler | code generation |
+
+e.g. _type information_
+* note: parsing only verifies the structure of a program
+* note: semantic analysis verifies meaning of a program (e.g. are two operands of the same type so that this operation is valid)
+```golang
+var x int; // type information declared here
+print(x+4) // type information used to verify operations are allowed (+,print)
+```
+
+### Semantic Checks: Identifier
+
+Semantic checks for __identifiers (i.e. variables)__
+1. _check_: identifier has been declared and is in the correct scope
+2. _check_: the inferred type of the identifier matches its declared type
+* __inferred type__: the type that the compiler automatically deduces (partially or fully) during compilation
+* __declared type__: the type specified by the programmer when writing the source code for the identifier
+* e.g. of invalid program `var y int; y = true`. `y` has declared type `int`. the inferred type looking at the expression is `boolean`
+
+```golang
+// parsing complete (correct structure)
+// (0) add declaration to symbol table (hash table)
+// (1) verify x has already been defined within scope of this function (check symbol table)
+func main(){
+  var y int;
+  y = x + 4; // invalid
+}
+```
+
+### Semantic Checks: Binary Expression
+
+Semantic checks for __binary expressions__ (`exp1 op exp2`)
+1. _check_: make sure that `exp1` and `exp2` are of the same type
+2. _check_: that the binary expressions inferred type matches operator and operand types
+* e.g. `"Lamont" + 4` is invalid because `+`, based on the language, can only work on two strings (concatenation) or numbers (arithmetic addition)
+
+```golang
+// invalid program
+func main(){
+  var y int;
+  var x bool;
+  y = 4 + true; // invalid: fails check 1
+  x = 4 + 6; // invalid: fails check 2
+}
+```
+
+### Semantic Checks: Assignment Statement
+
+Semantic checks for __Assignment Statement__ (`exp1 = exp2`)
+1. _check_: make sure that `exp1` is assignable (i.e., not an expression or constant, usually variable or struct field)
+2. _check_: make sure that `exp1` and `exp2` are of the same type
+
+```golang
+// invalid program
+func main(){
+  var x bool;
+  3 = 4 + 6; // invalid: fails check 1
+  x = 4 + 6; // invalid: fails check 2
+}
+```
+
+### Semantic Checks: Field Reference
+
+Semantic checks for __Field Reference__ (`expr.f`)
+1. _check_: make sure that `expr` is a reference type (not a primitive type)
+2. _check_: make sure that the inferred type is the declared type of `f`
+
+```golang
+type Point struct {
+  x int
+  y int
+}
+
+// invalid program
+func main(){
+  var x bool;
+  var t *Point;
+
+  x.x = 4; // fails case 1 because it is a primitive type not a reference type
+
+  t = new Point;
+  t.harry = 4; // fails. need to confirm harry is a field of struct
+  t.x = true; // fails case 2 because x is declared an int so the inferred type of expression needs to be as well, but it is bool
+  t.x = 4; // ok
+
+}
+```
+
+### Semantic Checks: Function Calls
+
+Semantic checks for __call__ statement `(f(e1,e2,...,en))`
+1. _check_: make sure that `f` is a function defined in the namespace (i.e., scope of the calling function)
+2. _check_: make sure each argument (`e1,e2,...,en`) has inferred type that matches the type of its corresponding parameter
+3. _check_: inferred (return value) type matches the declared return type of the function
+
+```golang
+func foo(y bool) int {
+  return 3;
+}
+
+func foobar(y bool) int { // fails case 3 bc function return value type does not match return type declared by function
+  return true; 
+}
+
+func foobar(y bool) int { // fails case 3 bc function has no return value type but function specifies a particular return type
+  return;
+}
+
+func main() {
+  var t int;
+  var myvar bool;
+  t = bar(); // fails case 1 because bar is not in the namespace of main
+  t = foo(); // fails case 2 because parameter list types don't match that in definition
+  t = foo(5); // fails case 2 because type for argument does not match specification of the declaration for this particular parameter
+  myvar = foo(5); // fails case 3 inferred type (return value) does not match declared type on LHS
+}
+```
+
+## Symbol Table
+
+### Variable Definitions and Scoping
+
+consider the source code
+```golang
+var x = 0
+
+func foo(x int) int { // this called "hiding"
+  fmt.Printf("<1>x=%v\n", x) // x refers to the parameter (the argument); not x in global scope
+  y := x + 3 // 4
+  bar := func(x int) int { 
+    fmt.Printf("<2>x=%v\n", x) // refers to the inner most scoping for the variable x; 
+    z := x + 1 
+    return z 
+  }
+  return y + bar(2) // bar(2) == 3
+}
+
+func main() {
+  x = foo(1) // e.g. which x is used? the one in the global scope
+  fmt.Printf("<3>x=%v\n", x) // which x is used? the one in this scope. hiding
+}
+```
+* whenever a variable appears in a statement,
+* we first look to see if that variable has been defined in the local scope
+* if the variable has not been declared in the local scope, we look at the global scope (an outer scope)
+* when there are two variables with the same name defined in two different scopes (for example `x` defined in the global scope, `x` defined in the local scope), we say that the variable at the inner scope hides the scope of the variable in the global scope.
+
+We need to make sure each variable is defined and check for type consistency. How can we do this?
+* Define a symbol table
+* Traverse the abstract syntax tree in a specific order while maintaining a data structure that maps a variable -> type
+
+### Symbol Table
+
+Programmatically, a __symbol table__ is a set of (name, attribute) pairs
+* Also known as __environments__
+* __Names__
+  * are typically strings (`“a”`, `“computeAverage”`, `“foo”`)
+* __Attributes__ (also know as bindings)
+  * Type identifier (`int`, `string`, `bool`)
+  * Variable Identifier (_type_, or _value_)
+  * Function Identifier (_arguments_, and _result type_)
+
+We build and use symbol tables during the semantic pass
+1. build the symbol tables by going through the declarations of the program
+2. use the symbol tables to check semantic rules
+
+You may need to augment and use the symbol tables in the later compiler phases (later)
+* Main Goal: How do you efficiently look-up and add _(name, attribute)_ pairs to a symbol table?
+
+### Implementation (Symbol Table)
+
+__Hash tables__
+* efficient data structure (`O(1) expected` time for search and insertion) but deleting from a hash table can be expensive
+
+__Balanced Binary Trees__
+* functional approach that does not need to explicitly "_delete_"; search and insertion is `O(log N)` (see textbook for details)
+* we are going to use the imperative approach
+
+### Implementation (Imperative Symbol Table Implementation)
+
+_Define a global symbol table_
+* the symbol table will map global variable declarations, function declarations, struct declarations to information about those constructs
+* do a single pass over the definitions in the AST
+* keep this symbol table around for future phases of the compiler
+
+```golang
+var x = 0
+
+type Point2D struct {
+  x int
+  y int
+}
+
+func main() {
+  x = 1
+}
+
+```
+
+![alt text](pics/p59.JPG "Title")
+
+Will want to define various structs to hold convenient information for encountering various information
+* __`VarEntry`__: `ty Type`, `location MemoryLocation`
+* __`StructEntry`__: will probably have a `[]VarEntry`
+* __`FunctionEntry`__
+
+### nested scopes?
+
+How do we handle nested functions or nested scopes? What about nested scopes?
+* Generate a new symbol table for inner scopes that is linked to the surrounding scope’s table 
+  * Think of this as a stack of symbol tables where the top of the stack is the current innermost scope and the bottom of the stack is the global scope.
+  * Look for an identifier in inner scope (top of the stack) and if its not found look in outer scope (recursively)
+  * Important: Don’t delete these scopes! Keep these tables around by adding a pointer to the parent scope table.
+
+> example: visual symbol table for code in prior section
+![alt text](pics/p60.JPG "Title")
+
+### Identifier Errors
+
+_What happens when we encounter an undeclared identifier?_
+* Only specify the error once by creating a table entry for it once you identified the undeclared identifier and make a "unknown" entry for it so you know later on if you see it again that you already notified the user of the error
+  * this is because you only need to report the error to the user once
+
+### Predefined Declarations
+
+Many languages have predefined declarations that are built into the language
+* e.g. functions, constants, standard libraries
+* e.g. `append()`
+
+At compiler startup, include initialization code to manually insert these declarations into the global symbol table
+* the phases of the compiler do not care about these "predefined" declarations versus the ones defined in the source program
+
+## Types and Type System
+
+* __type__: for an expression tells us the operations that can be applied to the values of that expression
+* __type system__: set of typing rules that define what type-consistency means in the language
+* __type checking__: ensure programs adhere to the typing rules of the languages
+  * _one of the key parts of semantic analysis_
+
+the kinds of type checking:
+* __static type checking__: types are checked at compile time
+* __dynamic type checking__: types are checked at run time
+
+> e.g. if `+` only meant arithmetric addition, then if an expression types to an `int`, then use of `+` is valid
+
+### Type Safety
+
+Along with languages being classified as static or dynamically typed, they can also be at the same time either strongly or weakly typed
+* __strongly typed__: languages have definitive types for their variables. It guarantees no illegal operations are performed
+* __weakly typed__: languages have variables that are less highly coupled to a specific type. There's no guarantee that no illegal operations will be performed.
+* it can sometimes be hard to categorize languages intot hese categories based on many different meanings of them
+
+* Statically typed, Strongly typed: `Java`, `SML`, `Golang`
+* Statically typed,   Weakly typed: `C`, `C++`
+  * can define a variable to be equal to a pointer to a specific type, but behind the scenes you can do type casting and pointer arithmetic to modify the type or use the type in a way that is different from how it was originally declared
+* Dynamically typed, Strongly typed: `Python`, `Ruby`
+* Dynamically typed,   Weakly typed: `Javascript`
+
+### Base Types vs Compound Types
+
+__Base Types__: (also known as fundamental, atomic, primitive types) are provided by (i.e. built-into) the language as a basic building block for other types
+* e.g. `int`, real (i.e., `float`, `double`, etc.), `string` (not always), `char`, `bool`
+
+__Compound Types__: built up from other types (sometimes recursively)
+* e.g. structs, classes, records, arrays, pointers
+```golang
+type Node struct {
+  data int
+  next *Node
+}
+```
+
+### Type Equivalence
+
+_How do we know if two types are the same?_
+* base types are the same if they are identical
+* compound types fall into two basic categories
+  * __Structural Equivalence (SE)__: two types are the same if their attribute types are recursively equivalent
+  * __Name Equivalence (NE)__: two types are the same if and only if they have the same name
+
+```golang
+// Equivalent under Structural Equivalence (SE)
+// not equivalent under Name Equivalence (NE)
+type Point2D struct{
+  x int
+  y int
+}
+
+type Point struct{
+  x int
+  y int
+}
+```
+
+### Type Representation
+
+__Important!__: Type nodes are not the same as AST node!
+* _AST_: abstract representation of the __meaning__ of the source program
+* _Types_: abstract representation of the type semantics for the type system
+* make sure to have a separate type system inheritance hierarchy specifically for type checking that is not part of the AST inheritance hierarchy
+
+### Base Type Implementation
+
+create a separate base type struct for each base type (`int`, `bool`, `char`, etc)
+* might be useful to make this a singleton (i.e., a single pointer instance that is defined at compiler startup). It will make it easier to do equality checking
+* Useful to create a "`void`" type that represents that a function does not return a value
+* Useful to create a "`unknown`" type to help handle errors
+
+### Compound Type Implementation
+ 
+Similar to base types, define structs that include information about the field types
+
+```golang
+type Type interface{
+  //...
+}
+
+type StructType interface { // base StructType interface
+  Type
+}
+
+type structType struct {
+  fields map[string]Type
+}
+```
